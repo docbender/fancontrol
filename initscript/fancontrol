@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# chkconfig: 345 99 10
+# description: Startup/shutdown script for FanControl daemon
+#
+### BEGIN INIT INFO
+# Provides:          fancontrol
+# Required-Start:    $network $local_fs $remote_fs
+# Required-Stop::    $network $local_fs $remote_fs
+# Should-Start:      $all
+# Should-Stop:       $all
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Control fan connected to RockPi4 by CPU temperature
+### END INIT INFO
+
+FANCONTROL=/usr/local/bin/fancontrol
+ARGS="--daemon"
+
+USER=root
+USER_ID=$(id -u $USER)
+GROUP_ID=$(id -g $USER)
+
+
+test -f $FANCONTROL || exit 0
+
+. /lib/lsb/init-functions
+
+case "$1" in
+start)  log_daemon_msg "Starting fancontrol" "fancontrol"
+        start-stop-daemon --start --user $USER --exec $FANCONTROL -- $ARGS $LSBNAMES
+        log_end_msg $?
+        ;;
+stop)   log_daemon_msg "Stopping fancontrol" "fancontrol"
+        start-stop-daemon --stop --quiet --name fancontrol --user $USER
+        log_end_msg $?
+        ;;
+restart|reload|force-reload)
+        log_daemon_msg "Restarting fancontrol" "fancontrol"
+        start-stop-daemon --stop --retry 5 --quiet --name fancontrol --user $USER
+        start-stop-daemon --start --user $USER --exec $FANCONTROL -- $ARGS $LSBNAMES
+        log_end_msg $?
+        ;;
+status)
+        status_of_proc -p $PIDFILE $FANCONTROL fancontrol && exit 0 || exit $?
+        ;;
+*)      log_action_msg "Usage: /etc/init.d/fancontrol {start|stop|restart|reload|force-reload|status}"
+        exit 2
+        ;;
+esac
+exit 0
+
