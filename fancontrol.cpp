@@ -10,11 +10,9 @@
 #include <fcntl.h>
 #include <getopt.h>
 
-/* mraa headers */
-#include "mraa/common.hpp"
-#include "mraa/gpio.hpp"
+using namespace std;
 
-#define POWER_ON_PIN 12
+#define POWER_ON_PIN 154 //12 pin  = 131 GPIO number, 16 pin = 154 GPIO number
 #define TEMPERATURE_FILE "/sys/class/thermal/thermal_zone0/temp"
 #define PIPE_NAME "/tmp/fancontrol.pipe"
 
@@ -97,7 +95,6 @@ void help(void){
 int main(int argc, char *argv[])
 {
     int daemon=0, opt, long_index = 0;
-    mraa::Result status;
 
     // install signal handler
     signal(SIGINT, sig_handler);
@@ -124,17 +121,34 @@ int main(int argc, char *argv[])
         }
     }
 
-    // initialize GPIO pin
-    mraa::Gpio power(POWER_ON_PIN);
-    status = power.dir(mraa::DIR_OUT);
-    if (status != mraa::SUCCESS) {
-        printError(status);
-        return EXIT_FAILURE;
-    }
-
     int _temp,_pipe_fd=-1;
+    char _gpiopath[50];
     char _pipestr[80];
     int _fanRun = 0;
+
+    std::cout << "Starting control fan with pin " << POWER_ON_PIN << "..." << std::endl;
+
+    // initialize GPIO pin
+    ofstream pinExport("/sys/class/gpio/export");
+    pinExport << POWER_ON_PIN;
+    if(!daemon)
+        std::cout << "Pin " << POWER_ON_PIN << " exported" << std::endl;
+    pinExport.close();
+
+    sprintf(_gpiopath, "/sys/class/gpio/gpio%d/direction",POWER_ON_PIN); 
+
+    ofstream pinDirection(_gpiopath);
+    pinDirection << "out";
+    pinDirection.close();
+    if(!daemon)
+        std::cout << "Pin " << POWER_ON_PIN << " set to output" << std::endl;
+
+    sprintf(_gpiopath, "/sys/class/gpio/gpio%d/value",POWER_ON_PIN); 
+
+    ofstream pinValue(_gpiopath);
+    pinValue << "0";
+    if(!daemon)
+        std::cout << "Pin " << POWER_ON_PIN << " initialized to 0" << std::endl;
 
     // create fifo
     mkfifo(PIPE_NAME, 0644);
@@ -148,27 +162,25 @@ int main(int argc, char *argv[])
         }
 
 	// turn on fan
-	if(_temp>55){
+	if(_temp>60){
             _fanRun = 1;
 	// turn off fan
         }else if(_temp<50){
             _fanRun = 0;
         }
 
-        power.write(_fanRun);
-
-	if(!daemon)
-            std::cout << "Current temp: " << _temp << "C -> "; 
-
-        sprintf(_pipestr, "%d;%d\n",_fanRun, _temp); 
-
-	if(!daemon)
-            std::cout << _pipestr ;
+        // write pin value
+        pinValue << _fanRun;
+	pinValue.flush();
 
         // try to open pipe
         if(_pipe_fd < 0){
             _pipe_fd = open(PIPE_NAME, O_WRONLY | O_NONBLOCK);
         }
+
+	if(!daemon || _pipe_fd > 0)
+	    sprintf(_pipestr, "%d;%d\n",_fanRun, _temp); 
+
         // write into opened pipe
 	if(_pipe_fd > 0){
             if(dprintf(_pipe_fd, _pipestr) < 0){
@@ -177,8 +189,21 @@ int main(int argc, char *argv[])
             }
         }
 
+	if(!daemon){
+            std::cout << "Current temp: " << _temp << "C -> "; 
+            std::cout << _pipestr ;
+	}
+
 	sleep(10);
     }
+
+    if(!daemon){
+        std::cout << "Reset pin " << POWER_ON_PIN << " to 0" << std::endl;
+	std::cout << "Bye bye" << std::endl;
+    }
+
+    pinValue << "0";
+    pinValue.close();
 
     if(_pipe_fd > 0){
         close(_pipe_fd);
