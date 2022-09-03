@@ -1,14 +1,11 @@
 # Fan control
-Control external fan by switching GPIO 12 (defined as POWER_PIN in source code). 
+Control external fan by switching GPIO 15 (defined as POWER_PIN in source code). 
 Fan with nominal voltage 12V is powered by step-up converter.
 
 ![Alt text](./switch_step_up.svg)
 
-## Dependency
-Libmraa - https://wiki.radxa.com/Rockpi4/dev/libmraa
-
 ## Compilation
-g++ -o fancontrol fancontrol.cpp -lmraa
+g++ -o fancontrol fancontrol.cpp
 
 ## Temperature
 CPU temperature is read from '/sys/class/thermal/thermal_zone0/temp' file
